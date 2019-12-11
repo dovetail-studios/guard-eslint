@@ -1,6 +1,7 @@
 # coding: utf-8
 
 require 'json'
+require 'open3'
 
 module Guard
   class Eslint
@@ -11,44 +12,75 @@ module Guard
         @options = options
       end
 
-      def run(paths = [])
-        command = build_command(paths)
-        passed = system(*command)
-        case @options[:notification]
+      attr_reader :options
+
+      def run(paths)
+        paths = options[:default_paths] unless paths
+
+        passed = run_for_check(paths)
+        case options[:notification]
         when :failed
           notify(passed) unless passed
         when true
           notify(passed)
         end
 
-        show_output(paths)
+        run_for_output(paths)
 
         passed
       end
 
-      def show_output(paths)
-        command = [{ 'PATH' => "#{`npm bin`.chomp}:#{ENV['PATH']}" }, 'eslint']
+      def failed_paths
+        result.reject { |f| f[:messages].empty? }.map { |f| f[:filePath] }
+      end
 
-        command.concat(Dir['**/**.js', '**/**.jsx', '**/**.es6'].reject { |f| f =~ %r{^(?:node_modules|bower_components)/} }) if paths.empty?
+      private
+
+      attr_accessor :check_stdout, :check_stderr
+
+      def run_for_check(paths)
+        command = command_for_check(paths)
+        (stdout, stderr, status) = Open3.capture3(*command)
+        self.check_stdout = stdout
+        self.check_stderr = stderr
+        status
+      rescue SystemCallError => e
+        fail "The eslint command failed with #{e.message}: `#{command}`"
+      end
+
+      ##
+      # Once eslint reports a failure, we have to run it again to show the results using the
+      # formatter that it uses for output.
+      # This because eslint doesn't support multiple formatters during the same run.
+      def run_for_output(paths)
+        if(options[:command])
+          command = [options[:command]]
+        else
+          command = [{ 'PATH' => "#{`npm bin`.chomp}:#{ENV['PATH']}" }, 'eslint']
+          command.concat(Dir['**/**.js', '**/**.jsx', '**/**.es6'].reject { |f| f =~ %r{^(?:node_modules|bower_components)/} }) if paths.empty?
+        end
 
         command.concat(args_specified_by_user)
+        command.concat(['-f', options[:formatter]]) if options[:formatter]
         command.concat(paths)
         system(*command)
       end
 
-      def build_command(paths)
-        command = [{ 'PATH' => "#{`npm bin`.chomp}:#{ENV['PATH']}" }, 'eslint']
-
-        command.concat(Dir['**/**.js', '**/**.jsx', '**/**.es6'].reject { |f| f =~ %r{^(?:node_modules|bower_components)/} }) if paths.empty?
-
-        command.concat(['-f', 'json', '-o', json_file_path])
+      def command_for_check(paths)
+        if(options[:command])
+          command = [options[:command]]
+        else
+          command = [{ 'PATH' => "#{`npm bin`.chomp}:#{ENV['PATH']}" }, 'eslint']
+          command.concat(Dir['**/**.js', '**/**.jsx', '**/**.es6'].reject { |f| f =~ %r{^(?:node_modules|bower_components)/} }) if paths.empty?
+        end
         command.concat(args_specified_by_user)
+        command.concat(['-f', 'json', '-o', json_file_path])
         command.concat(paths)
       end
 
       def args_specified_by_user
         @args_specified_by_user ||= begin
-          args = @options[:cli]
+          args = options[:cli]
           case args
           when Array    then args
           when String   then args.shellsplit
@@ -60,11 +92,18 @@ module Guard
 
       def json_file_path
         @json_file_path ||= begin
+          json_file.close
+          json_file.path
+        end
+      end
+
+      ##
+      # Keep the Tempfile instance around so it isn't garbage-collected and therefore deleted.
+      def json_file
+        @json_file ||= begin
           # Just generate random tempfile path.
           basename = self.class.name.downcase.gsub('::', '_')
-          tempfile = Tempfile.new(basename)
-          tempfile.close
-          tempfile.path
+          Tempfile.new(basename)
         end
       end
 
@@ -75,6 +114,8 @@ module Guard
             JSON.parse(file.read, symbolize_names: true)
           end
         end
+      rescue JSON::ParserError
+        fail "eslint JSON output could not be parsed. Output from eslint was:\n#{check_stderr}\n#{check_stdout}"
       end
 
       def notify(passed)
@@ -102,10 +143,6 @@ module Guard
         text << ' detected'
       end
       # rubocop:enable Metric/AbcSize
-
-      def failed_paths
-        result.reject { |f| f[:messages].empty? }.map { |f| f[:filePath] }
-      end
 
       def pluralize(number, thing, options = {})
         text = ''
