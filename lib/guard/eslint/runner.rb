@@ -12,12 +12,12 @@ module Guard
         @options = options
       end
 
-      attr_reader :options, :paths
+      attr_reader :options, :path_args
 
-      def run(passed_in_paths)
-        @paths = options[:default_paths] unless passed_in_paths
+      def run(paths)
+        @path_args = options[:default_paths] unless paths
 
-        passed = run_for_check(@paths)
+        passed = run_for_check(@path_args)
         case options[:notification]
         when :failed
           notify(passed) unless passed
@@ -25,7 +25,7 @@ module Guard
           notify(passed)
         end
 
-        run_for_output(@paths)
+        run_for_output(@path_args)
 
         passed
       end
@@ -119,7 +119,7 @@ module Guard
                       end
                     end
       rescue JSON::ParserError
-        fail "eslint JSON output could not be parsed. Output from eslint command: #{command_for_check(paths)} was:\n#{check_stderr}\n#{check_stdout}"
+        fail "eslint JSON output could not be parsed. Output from eslint command: #{command_for_check(path_args)} was:\n#{check_stderr}\n#{check_stdout}"
       end
 
       def notify(passed)
