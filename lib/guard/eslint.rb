@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'guard/compat/plugin'
 
 module Guard
@@ -23,7 +25,7 @@ module Guard
         cli: nil,
         formatter: nil,
         command: 'eslint',
-        default_paths: ['**/*.js', '**/*.es6'],
+        default_paths: %w[**/*.js **/*.es6]
       }.merge(options)
 
       @failed_paths = []
@@ -57,7 +59,7 @@ module Guard
     # @return [Object] the task result
     #
     def run_all
-      Compat::UI.info 'Inspecting all Javascript files'
+      Guard::Compat::UI.info 'Inspecting all Javascript files'
       inspect_with_eslint
     end
 
@@ -88,9 +90,10 @@ module Guard
       passed = runner.run(paths)
       @failed_paths = runner.failed_paths
       throw :task_has_failed unless passed
-    rescue => error
+      true
+    rescue StandardError => e
       Compat::UI.error 'The following exception occurred while running guard-eslint: ' \
-                       "#{error.backtrace.first} #{error.message} (#{error.class.name})"
+                       "#{e.backtrace.first} #{e.message} (#{e.class.name})"
     end
 
     def run_partially(paths)
@@ -111,6 +114,7 @@ module Guard
       paths.uniq!
       paths.reject! do |path|
         next true unless File.exist?(path)
+
         included_in_other_path?(path, paths)
       end
       paths

@@ -1,7 +1,9 @@
-# coding: utf-8
+# frozen_string_literal: true
 
+require 'guard/compat/plugin'
 require 'json'
 require 'open3'
+require 'tempfile'
 
 module Guard
   class Eslint
@@ -15,7 +17,7 @@ module Guard
       attr_reader :options, :path_args
 
       def run(paths)
-        @path_args = options[:default_paths] unless paths
+        @path_args = options[:default_paths] unless paths&.any?
 
         passed = run_for_check(@path_args)
         case options[:notification]
@@ -45,7 +47,7 @@ module Guard
         self.check_stderr = stderr
         status
       rescue SystemCallError => e
-        fail "The eslint command failed with #{e.message}: `#{command}`"
+        raise "The eslint command failed with #{e.message}: `#{command}`"
       end
 
       ##
@@ -53,12 +55,7 @@ module Guard
       # formatter that it uses for output.
       # This because eslint doesn't support multiple formatters during the same run.
       def run_for_output(paths)
-        if (options[:command])
-          command = [options[:command]]
-        else
-          command = [{ 'PATH' => "#{`npm bin`.chomp}:#{ENV['PATH']}" }, 'eslint']
-          command.concat(Dir['**/**.js', '**/**.jsx', '**/**.es6'].reject { |f| f =~ %r{^(?:node_modules|bower_components)/} }) if paths.empty?
-        end
+        command = build_commands(paths)
 
         command.concat(args_specified_by_user)
         command.concat(['-f', options[:formatter]]) if options[:formatter]
@@ -67,29 +64,38 @@ module Guard
       end
 
       def command_for_check(paths)
+        command = build_commands(paths)
+        command.concat(args_specified_by_user)
+        command.concat(['-f', 'json', '-o', json_file_path])
+        command.concat(paths)
+      end
+
+      def build_commands(paths)
         if options[:command]
           command = [options[:command]]
         else
           command = [{ 'PATH' => "#{`npm bin`.chomp}:#{ENV['PATH']}" }, 'eslint']
-          command.concat(Dir['**/**.js', '**/**.jsx', '**/**.es6'].reject { |f| f =~ %r{^(?:node_modules|bower_components)/} }) if paths.empty?
+          if paths.empty?
+            command.concat(Dir['**/**.js', '**/**.jsx', '**/**.es6'])
+          end
         end
-        command.concat(args_specified_by_user)
-        command.concat(['-f', 'json', '-o', json_file_path])
-        command.concat(paths)
+        command.reject do |f|
+          f =~ %r{^(?:node_modules|bower_components)/}
+        end
       end
 
       def args_specified_by_user
         @args_specified_by_user ||= begin
                                       args = options[:cli]
                                       case args
-                                      when Array then
+                                      when Array
                                         args
-                                      when String then
+                                      when String
                                         args.shellsplit
-                                      when NilClass then
+                                      when NilClass
                                         []
                                       else
-                                        fail ':cli option must be either an array or string'
+                                        raise ':cli option must be either an array or string'
                                       end
                                     end
       end
@@ -119,7 +125,8 @@ module Guard
                       end
                     end
       rescue JSON::ParserError
-        fail "eslint JSON output could not be parsed. Output from eslint command: #{command_for_check(path_args)} was:\n#{check_stderr}\n#{check_stdout}"
+        raise 'eslint JSON output could not be parsed. '\
+"Output from eslint command: #{command_for_check(path_args)} was:\n#{check_stderr}\n#{check_stdout}"
       end
 
       def notify(passed)
@@ -127,7 +134,6 @@ module Guard
         Notifier.notify(summary_text, title: 'ESLint results', image: image)
       end
 
-      # rubocop:disable Metric/AbcSize
       def summary_text
         summary = {
           files_inspected: result.count,
@@ -135,7 +141,7 @@ module Guard
           warnings: result.map { |x| x[:warningCount] }.reduce(:+)
         }
 
-        text = pluralize(summary[:files_inspected], 'file')
+        text = [pluralize(summary[:files_inspected], 'file')]
         text << ' inspected, '
 
         errors_count = summary[:errors]
@@ -145,14 +151,13 @@ module Guard
         warning_count = summary[:warnings]
         text << pluralize(warning_count, 'warning', no_for_zero: true)
         text << ' detected'
+        text.join('')
       end
 
-      # rubocop:enable Metric/AbcSize
-
       def pluralize(number, thing, options = {})
-        text = ''
+        text = ['']
 
-        if number == 0 && options[:no_for_zero]
+        if number.zero? && options[:no_for_zero]
           text = 'no'
         else
           text << number.to_s
@@ -161,7 +166,7 @@ module Guard
         text << " #{thing}"
         text << 's' unless number == 1
 
-        text
+        text.join('')
       end
     end
   end

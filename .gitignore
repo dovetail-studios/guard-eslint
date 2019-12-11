@@ -5,8 +5,9 @@
 /coverage/
 /doc/
 /pkg/
-/spec/reports/
 /tmp/
+/node_modules/
+.idea
 
 .ruby-version
 .ruby-gemset

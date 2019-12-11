@@ -1,27 +1,23 @@
-require: rubocop-rspec
-AllCops:
-  DisplayCopNames: true
-  DisplayStyleGuide: true
-  Exclude:
-    - bin/**/*
-    - db/**/*
-    - vendor/**/*
-    - Guardfile
-Rails:
-  Enabled: true
-Metrics/LineLength:
-  Max: 100
 Style/Documentation:
-  Enabled: false
-Style/NumericLiterals:
   Enabled: false
 Style/ClassAndModuleChildren:
   Enabled: false
-MethodLength:
-  Max: 15
-  Enabled: false
-  Enabled: false
-RegexpLiteral:
+
+Style/RegexpLiteral:
   Exclude:
     - '**/*.gemspec'
     - '**/Guardfile'
+
+Metrics/LineLength:
+  Max: 120
+Metrics/MethodLength:
+  Max: 15
+Metrics/ClassLength:
+  Exclude:
+    - 'lib/guard/eslint/runner.rb'
+Metrics/AbcSize:
+  Exclude:
+    - 'lib/guard/eslint/runner.rb'
+Gemspec/RequiredRubyVersion:
+  Include:
+    - "2.4"

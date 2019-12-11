@@ -50,10 +50,14 @@ default_paths: ['**/*.js', '**/*.es6'] # The default paths that will be used for
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/RobinDaugherty/guard-eslint.
+Bug reports and pull requests are welcome on GitHub at https://github.com/andrew-newell/guard-eslint.
 
 * Please create a topic branch for every separate change you make.
 * Make sure your patches are well-tested.
 * Update the README to reflect your changes.
 * Please **do not change** the version number.
 * Open a pull request. 
+
+## Developing
+
+You must use npm 6+ probably.

@@ -1,3 +1,7 @@
+# frozen_string_literal: true
+
+require 'guard/compat/plugin'
+
 module Guard
   # A workaround for some superclass BS
   # where Eslint < Guard has to exist?
