@@ -12,12 +12,12 @@ module Guard
         @options = options
       end
 
-      attr_reader :options
+      attr_reader :options, :paths
 
-      def run(paths)
-        paths = options[:default_paths] unless paths
+      def run(passed_in_paths)
+        @paths = options[:default_paths] unless passed_in_paths
 
-        passed = run_for_check(paths)
+        passed = run_for_check(@paths)
         case options[:notification]
         when :failed
           notify(passed) unless passed
@@ -25,7 +25,7 @@ module Guard
           notify(passed)
         end
 
-        run_for_output(paths)
+        run_for_output(@paths)
 
         passed
       end
@@ -53,7 +53,7 @@ module Guard
       # formatter that it uses for output.
       # This because eslint doesn't support multiple formatters during the same run.
       def run_for_output(paths)
-        if(options[:command])
+        if (options[:command])
           command = [options[:command]]
         else
           command = [{ 'PATH' => "#{`npm bin`.chomp}:#{ENV['PATH']}" }, 'eslint']
@@ -67,7 +67,7 @@ module Guard
       end
 
       def command_for_check(paths)
-        if(options[:command])
+        if options[:command]
           command = [options[:command]]
         else
           command = [{ 'PATH' => "#{`npm bin`.chomp}:#{ENV['PATH']}" }, 'eslint']
@@ -80,42 +80,46 @@ module Guard
 
       def args_specified_by_user
         @args_specified_by_user ||= begin
-          args = options[:cli]
-          case args
-          when Array    then args
-          when String   then args.shellsplit
-          when NilClass then []
-          else fail ':cli option must be either an array or string'
-          end
-        end
+                                      args = options[:cli]
+                                      case args
+                                      when Array then
+                                        args
+                                      when String then
+                                        args.shellsplit
+                                      when NilClass then
+                                        []
+                                      else
+                                        fail ':cli option must be either an array or string'
+                                      end
+                                    end
       end
 
       def json_file_path
         @json_file_path ||= begin
-          json_file.close
-          json_file.path
-        end
+                              json_file.close
+                              json_file.path
+                            end
       end
 
       ##
       # Keep the Tempfile instance around so it isn't garbage-collected and therefore deleted.
       def json_file
         @json_file ||= begin
-          # Just generate random tempfile path.
-          basename = self.class.name.downcase.gsub('::', '_')
-          Tempfile.new(basename)
-        end
+                         # Just generate random tempfile path.
+                         basename = self.class.name.downcase.gsub('::', '_')
+                         Tempfile.new(basename)
+                       end
       end
 
       def result
         @result ||= begin
-          File.open(json_file_path) do |file|
-            # Rubinius 2.0.0.rc1 does not support `JSON.load` with 3 args.
-            JSON.parse(file.read, symbolize_names: true)
-          end
-        end
+                      File.open(json_file_path) do |file|
+                        # Rubinius 2.0.0.rc1 does not support `JSON.load` with 3 args.
+                        JSON.parse(file.read, symbolize_names: true)
+                      end
+                    end
       rescue JSON::ParserError
-        fail "eslint JSON output could not be parsed. Output from eslint was:\n#{check_stderr}\n#{check_stdout}"
+        fail "eslint JSON output could not be parsed. Output from eslint command: #{command_for_check(paths)} was:\n#{check_stderr}\n#{check_stdout}"
       end
 
       def notify(passed)
@@ -142,6 +146,7 @@ module Guard
         text << pluralize(warning_count, 'warning', no_for_zero: true)
         text << ' detected'
       end
+
       # rubocop:enable Metric/AbcSize
 
       def pluralize(number, thing, options = {})
